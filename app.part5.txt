@@ -1,0 +1,42 @@
+ modal(`<button class="modal-close" onclick="closeModal()">×</button><div class="kicker">Evento</div><h2>Editar carrera</h2><label>Nombre</label><input id="ee-title" class="field" value="${esc(e.title)}"><div class="form-grid"><div><label>Simulador</label><input id="ee-sim" class="field" value="${esc(e.sim)}"></div><div><label>Circuito</label><input id="ee-track" class="field" value="${esc(e.track)}"></div><div><label>Categoría</label><input id="ee-class" class="field" value="${esc(e.class)}"></div><div><label>Tipo</label><input id="ee-type" class="field" value="${esc(e.type)}"></div><div><label>Fecha y hora</label><input id="ee-start" class="field" type="datetime-local" value="${local}"></div><div><label>Duración</label><input id="ee-duration" class="field" type="number" value="${e.duration}"></div><div><label>Plazas</label><input id="ee-max" class="field" type="number" value="${e.max}"></div><div><label>Estado</label><select id="ee-status" class="field"><option value="open" ${e.status==='open'?'selected':''}>Abierto</option><option value="closed" ${e.status==='closed'?'selected':''}>Cerrado</option><option value="finished" ${e.status==='finished'?'selected':''}>Finalizado</option><option value="cancelled" ${e.status==='cancelled'?'selected':''}>Cancelado</option></select></div></div><button class="primary" style="width:100%;margin-top:18px" onclick="updateEvent('${id}')">GUARDAR CAMBIOS</button>`);
+}
+async function updateEvent(id){
+ const payload={title:document.querySelector('#ee-title').value.trim(),simulator:document.querySelector('#ee-sim').value.trim(),track:document.querySelector('#ee-track').value.trim(),car_class:document.querySelector('#ee-class').value.trim(),event_type:document.querySelector('#ee-type').value.trim(),starts_at:new Date(document.querySelector('#ee-start').value).toISOString(),duration_minutes:Number(document.querySelector('#ee-duration').value),max_slots:Number(document.querySelector('#ee-max').value),status:document.querySelector('#ee-status').value};
+ if(db){const {error}=await db.from('events').update(payload).eq('id',id);if(error)return toast(error.message);await loadData();}
+ else {const e=state.events.find(e=>e.id===id);Object.assign(e,{title:payload.title,sim:payload.simulator,track:payload.track,class:payload.car_class,type:payload.event_type,startsAt:payload.starts_at,duration:payload.duration_minutes,max:payload.max_slots,status:payload.status});}
+ closeModal();toast('Evento actualizado');render();
+}
+async function cancelEvent(id){if(!confirm('¿Cancelar este evento? Seguirá visible como cancelado.'))return;if(db){const {error}=await db.from('events').update({status:'cancelled'}).eq('id',id);if(error)return toast(error.message);await loadData();}else{const e=state.events.find(e=>e.id===id);if(e)e.status='cancelled';}toast('Evento cancelado');render();}
+async function updateRegistrationStatus(id,status){
+ if(db){if(status==='cancelled'){const {error}=await db.from('registrations').update({status:'cancelled'}).eq('id',id);if(error)return toast(error.message);}else{const {error}=await db.from('registrations').update({status}).eq('id',id);if(error)return toast(error.message);}await loadData();}
+ else {const r=state.registrations.find(r=>r.id===id);if(r)r.status=status;}
+ toast('Inscripción actualizada');render();
+}
+async function removeRegistration(id){if(!confirm('¿Eliminar esta inscripción?'))return;if(db){const {error}=await db.from('registrations').delete().eq('id',id);if(error)return toast(error.message);await loadData();}else state.registrations=state.registrations.filter(r=>r.id!==id);toast('Inscripción eliminada');render();}
+
+function createEventModal(){
+ if(db&&!state.user)return authModal('Necesitas una cuenta de organizador.');
+ const available=db&&state.user?state.communities.filter(c=>!c.isDemo&&c.ownerId===state.user.id):state.communities.filter(c=>!c.isDemo);
+ if(!available.length){toast('Primero crea una comunidad.');return createCommunityModal();}
+ const opts=available.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+ const champOpts=state.championships.filter(ch=>available.some(c=>String(c.id)===String(ch.communityId))).map(ch=>`<option value="${esc(ch.id)}">${esc(ch.name)}</option>`).join('');
+ modal(`<button class="modal-close" onclick="closeModal()">×</button><div class="kicker">Organizador</div><h2>Crear evento</h2><label>Comunidad</label><select id="ce-community" class="field">${opts}</select><label>Campeonato (opcional)</label><select id="ce-championship" class="field"><option value="">Carrera suelta</option>${champOpts}</select><label>Nombre del evento</label><input id="ce-title" class="field" placeholder="2H Spa Endurance"><div class="form-grid"><div><label>Simulador</label><input id="ce-sim" class="field" value="Le Mans Ultimate"></div><div><label>Circuito</label><input id="ce-track" class="field" placeholder="Spa-Francorchamps"></div><div><label>Categoría</label><input id="ce-class" class="field" placeholder="LMGT3"></div><div><label>Tipo</label><select id="ce-type" class="field"><option>Endurance</option><option>Sprint</option><option>Campeonato</option><option>Carrera</option></select></div><div><label>Fecha y hora</label><input id="ce-start" class="field" type="datetime-local"></div><div><label>Duración (min)</label><input id="ce-duration" class="field" type="number" value="90"></div><div><label>Plazas</label><input id="ce-max" class="field" type="number" value="40"></div></div><button class="primary" style="width:100%;margin-top:18px" onclick="createEvent()">PUBLICAR EVENTO</button>`);
+}
+async function createEvent(){
+ const c=document.querySelector('#ce-community').value,championship_id=document.querySelector('#ce-championship')?.value||null,title=document.querySelector('#ce-title').value.trim(),sim=document.querySelector('#ce-sim').value.trim(),track=document.querySelector('#ce-track').value.trim(),carClass=document.querySelector('#ce-class').value.trim(),eventType=document.querySelector('#ce-type').value,start=document.querySelector('#ce-start').value,duration=Number(document.querySelector('#ce-duration').value||60),max=Number(document.querySelector('#ce-max').value||40);
+ if(!title||!track||!start)return toast('Completa nombre, circuito y fecha.');
+ if(db){
+   const {error}=await db.from('events').insert({community_id:c,championship_id:championship_id||null,title,simulator:sim,track,car_class:carClass,event_type:eventType,starts_at:new Date(start).toISOString(),duration_minutes:duration,max_slots:max,status:'open',created_by:state.user.id});
+   if(error)return toast(error.message);await loadData();
+ }else{
+   const community=state.communities.find(x=>String(x.id)===String(c));state.events.unshift({id:'local-'+Date.now(),title,community:community?.name||'Mi comunidad',communityId:c,sim,track,class:carClass,startsAt:new Date(start).toISOString(),duration,slots:0,max,status:'open',type:eventType});
+ }
+ closeModal();toast('Evento publicado');render();
+}
+
+function render(){
+ const views={home:home(),races:races(),calendar:calendar(),communities:communitiesView(),championships:championshipsView(),streams:streamsView(),event:eventView(),profile:profile(),organizer:organizer()};
+ document.querySelector('#app').innerHTML=`<div class="shell">${nav()}${state.loading?'<div class="content"><div class="card empty">Cargando RaceHub…</div></div>':(views[state.view]||views.home)}${mobileNav()}<footer class="footer">RaceHub v0.4 · ${state.backend.startsWith('supabase')?'Supabase conectado':'modo demostración'} · Tu próxima carrera empieza aquí.</footer></div>`;
+}
+Object.assign(window,{goto,showEvent,toggleRegister,toggleFollow,homeSearch,toast,state,render,authModal,signIn,signUp,signOut,createCommunityModal,createCommunity,createChampionshipModal,createChampionship,addRoundModal,createRound,deleteRound,deleteChampionship,createEventModal,createEvent,editEventModal,updateEvent,cancelEvent,updateRegistrationStatus,removeRegistration,championshipDetail,scoringModal,saveScoring,resultsModal,saveResults,closeModal,activateSupabase});
+render();boot();
