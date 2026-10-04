@@ -19,6 +19,53 @@ const DEMO_STREAMS=[
 {name:'Adrián Blasco',game:'Le Mans Ultimate',title:'Entrenamiento LMGT3',event:'SRP Endurance — Road Atlanta',viewers:41,url:'#'},
 {name:'Marc V.',game:'iRacing',title:'Daytona multiclass practice',event:'Prototype Night — Daytona',viewers:23,url:'#'}];
 
+const RACE_CATALOG={
+ simulators:['Le Mans Ultimate','iRacing','Assetto Corsa Competizione','Assetto Corsa','Assetto Corsa EVO','Automobilista 2','RaceRoom','rFactor 2'],
+ circuits:{
+  'Le Mans Ultimate':['Bahrain','COTA','Daytona','Fuji','Imola','Interlagos','Le Mans','Long Beach','Monza','Portimão','Qatar','Road Atlanta','Sebring','Silverstone','Spa-Francorchamps'],
+  'iRacing':['Barcelona-Catalunya','Bathurst','Brands Hatch','COTA','Daytona','Fuji','Hockenheim','Imola','Indianapolis','Interlagos','Laguna Seca','Le Mans','Monza','Nürburgring','Road America','Road Atlanta','Sebring','Silverstone','Spa-Francorchamps','Suzuka','Watkins Glen'],
+  'Assetto Corsa Competizione':['Barcelona-Catalunya','Bathurst','Brands Hatch','COTA','Donington Park','Hungaroring','Imola','Kyalami','Laguna Seca','Misano','Monza','Mount Panorama','Nürburgring','Oulton Park','Paul Ricard','Silverstone','Spa-Francorchamps','Suzuka','Valencia','Watkins Glen','Zandvoort','Zolder'],
+  'Assetto Corsa':['Barcelona-Catalunya','Brands Hatch','Imola','Laguna Seca','Monza','Mugello','Nordschleife','Nürburgring GP','Red Bull Ring','Silverstone','Spa-Francorchamps','Vallelunga'],
+  'Assetto Corsa EVO':['Imola','Laguna Seca','Mount Panorama','Nürburgring','Road Atlanta','Silverstone','Spa-Francorchamps','Suzuka'],
+  'Automobilista 2':['Bathurst','Brands Hatch','Daytona','Hockenheim','Imola','Interlagos','Laguna Seca','Le Mans','Long Beach','Monza','Nordschleife','Road America','Silverstone','Spa-Francorchamps','Watkins Glen'],
+  'RaceRoom':['Bathurst','Brands Hatch','Hockenheim','Imola','Monza','Nürburgring','Paul Ricard','Red Bull Ring','Sepang','Silverstone','Spa-Francorchamps','Suzuka','Zandvoort'],
+  'rFactor 2':['Atlanta Motorsports Park','Bathurst','Brands Hatch','Daytona','Donington Park','Laguna Seca','Le Mans','Lime Rock Park','Long Beach','Monza','Sebring','Spa-Francorchamps']
+ },
+ categories:['Hypercar','LMGT3','LMP2','LMP2 ELMS','LMP3','GTE','GT3','GT4','GT2','GT1','TCR','Turismos','Fórmula','Prototipos','Cup','Multiclase'],
+ cars:{
+  'Hypercar':['Alpine A424','Aston Martin Valkyrie','BMW M Hybrid V8','Cadillac V-Series.R','Ferrari 499P','Peugeot 9X8','Porsche 963','Toyota GR010 Hybrid'],
+  'LMGT3':['Aston Martin Vantage AMR LMGT3','BMW M4 LMGT3','Chevrolet Corvette Z06 GT3.R','Ferrari 296 LMGT3','Ford Mustang LMGT3','Lexus RC F LMGT3','McLaren 720S LMGT3 Evo','Porsche 911 GT3 R LMGT3'],
+  'LMP2':['Oreca 07 Gibson'],
+  'LMP2 ELMS':['Oreca 07 Gibson'],
+  'LMP3':['Duqueine D09','Ginetta G61-LT-P3 Evo','Ligier JS P325'],
+  'GTE':['Aston Martin Vantage GTE','BMW M8 GTE','Chevrolet Corvette C8.R GTE','Ferrari 488 GTE','Porsche 911 RSR GTE'],
+  'GT3':['Aston Martin Vantage GT3','Audi R8 LMS GT3 Evo II','BMW M4 GT3','Ferrari 296 GT3','Ford Mustang GT3','Lamborghini Huracán GT3 Evo2','McLaren 720S GT3 Evo','Mercedes-AMG GT3','Porsche 911 GT3 R'],
+  'GT4':['Alpine A110 GT4','Aston Martin Vantage GT4','BMW M4 GT4','Chevrolet Camaro GT4.R','McLaren 570S GT4','Mercedes-AMG GT4','Porsche 718 Cayman GT4'],
+  'GT2':['Audi R8 LMS GT2','KTM X-Bow GT2','Maserati MC20 GT2','Mercedes-AMG GT2','Porsche 911 GT2 RS Clubsport'],
+  'GT1':['Aston Martin DBR9','Ferrari 550 GTS','McLaren F1 GTR','Mercedes-Benz CLK LM','Nissan R390 GT1','Porsche 911 GT1'],
+  'TCR':['Audi RS 3 LMS','Cupra León Competición','Honda Civic Type R TCR','Hyundai Elantra N TCR','Lynk & Co 03 TCR'],
+  'Turismos':['BMW M3','Chevrolet Cruze','Honda Civic','Mercedes 190E','Opel Vectra'],
+  'Fórmula':['Formula Vee','Formula Junior','Formula 3','Formula 4','Formula Renault','Formula Ultimate'],
+  'Prototipos':['Cadillac DPi-V.R','Ligier JS P320','Oreca 07','Porsche 963'],
+  'Cup':['BMW M2 CS Racing','Ferrari 488 Challenge Evo','Lamborghini Huracán Super Trofeo','Porsche 911 GT3 Cup'],
+  'Multiclase':['Selección según clase del evento']
+ }
+};
+function catalogOptions(items,selected=''){return items.map(v=>`<option value="${esc(v)}" ${String(v)===String(selected)?'selected':''}>${esc(v)}</option>`).join('');}
+function circuitsFor(sim){return RACE_CATALOG.circuits[sim]||[];}
+function carsForCategory(category){
+ const direct=RACE_CATALOG.cars[category];
+ if(direct)return direct;
+ const parts=String(category||'').split(/\s*[+/]\s*/).filter(Boolean);
+ return [...new Set(parts.flatMap(p=>RACE_CATALOG.cars[p]||[]))];
+}
+function refreshCircuitSelect(simId,circuitId,current=''){
+ const sim=document.querySelector('#'+simId)?.value||'';
+ const sel=document.querySelector('#'+circuitId); if(!sel)return;
+ const list=circuitsFor(sim);
+ sel.innerHTML=catalogOptions(list,current||list[0]||'');
+}
+
 const state={
  view:'home',sim:'Todos',day:'Todos',type:'Todos',eventId:null,
  user:null,profile:null,backend:'demo',loading:true,
