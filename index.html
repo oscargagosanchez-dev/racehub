@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0d" />
+  <meta name="description" content="RaceHub — todas las comunidades, carreras y campeonatos de simracing en un único lugar." />
+  <title>RaceHub — Tu próxima carrera empieza aquí</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <div style="min-height:100vh;background:#08090c;color:white;display:grid;place-items:center;font-family:Arial,sans-serif">
+      <div style="text-align:center">
+        <div style="font-size:34px;font-weight:900">RACEHUB</div>
+        <div style="margin-top:8px;color:#9ba0ab">Cargando…</div>
+      </div>
+    </div>
+  </div>
+  <div id="modal-root"></div>
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+  <script>
+    (function () {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+      s.async = true;
+      s.onload = function () { if (window.activateSupabase) window.activateSupabase(); };
+      s.onerror = function () { console.warn('Supabase CDN no disponible: RaceHub continúa en modo demo.'); };
+      document.body.appendChild(s);
+    })();
+  </script>
+</body>
+</html>
