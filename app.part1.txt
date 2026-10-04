@@ -1,0 +1,70 @@
+const DEMO_EVENTS=[
+{id:'demo-1',title:'SRP Endurance — Road Atlanta',community:'SRP Racing',communityId:'srp',sim:'Le Mans Ultimate',track:'Road Atlanta',class:'LMGT3',startsAt:new Date(Date.now()+2*3600000).toISOString(),duration:90,slots:31,max:40,status:'open',type:'Endurance'},
+{id:'demo-2',title:'GT Sprint Series — Monza',community:'TR Racing',communityId:'tr',sim:'ACC',track:'Monza',class:'GT3',startsAt:new Date(Date.now()+4*3600000).toISOString(),duration:60,slots:38,max:40,status:'open',type:'Sprint'},
+{id:'demo-3',title:'Prototype Night — Daytona',community:'Iberia SimSport',communityId:'iberia',sim:'iRacing',track:'Daytona',class:'GTP / LMP2',startsAt:new Date(Date.now()+27*3600000).toISOString(),duration:120,slots:40,max:40,status:'closed',type:'Endurance'},
+{id:'demo-4',title:'Hypercar Challenge — Spa',community:'Apex Community',communityId:'apex',sim:'Le Mans Ultimate',track:'Spa-Francorchamps',class:'Hypercar',startsAt:new Date(Date.now()+50*3600000).toISOString(),duration:100,slots:22,max:36,status:'open',type:'Campeonato'},
+{id:'demo-5',title:'Touring Masters — Spielberg',community:'Virtual Racing ES',communityId:'virtual',sim:'Automobilista 2',track:'Red Bull Ring',class:'Turismos',startsAt:new Date(Date.now()+75*3600000).toISOString(),duration:45,slots:19,max:30,status:'open',type:'Sprint'},
+{id:'demo-6',title:'GT Classics — Imola',community:'Apex Community',communityId:'apex',sim:'Assetto Corsa',track:'Imola',class:'GT / Cup',startsAt:new Date(Date.now()+98*3600000).toISOString(),duration:60,slots:16,max:30,status:'open',type:'Carrera'}];
+const DEMO_COMMUNITIES=[
+{id:'srp',name:'SRP Racing',sims:'LMU · ACC',members:248,events:7,tag:'SRP'},
+{id:'tr',name:'TR Racing',sims:'LMU · ACC · iRacing',members:391,events:5,tag:'TR'},
+{id:'iberia',name:'Iberia SimSport',sims:'iRacing · AMS2',members:184,events:4,tag:'IS'},
+{id:'apex',name:'Apex Community',sims:'LMU · AC EVO',members:326,events:6,tag:'AP'}];
+const DEMO_CHAMPIONSHIPS=[
+{id:'ch1',name:'WEC Community Series',community:'SRP Racing',sim:'Le Mans Ultimate',rounds:'3 / 6',class:'Hypercar + LMGT3'},
+{id:'ch2',name:'GT Sprint Championship',community:'TR Racing',sim:'ACC',rounds:'5 / 8',class:'GT3'},
+{id:'ch3',name:'Americas Prototype Cup',community:'Iberia SimSport',sim:'iRacing',rounds:'2 / 5',class:'GTP / LMP2'}];
+const DEMO_STREAMS=[
+{name:'Oscar Risan',game:'Le Mans Ultimate',title:'Preparando la carrera de Road Atlanta',event:'SRP Endurance — Road Atlanta',viewers:84,url:'https://twitch.tv/oscarrisan'},
+{name:'Adrián Blasco',game:'Le Mans Ultimate',title:'Entrenamiento LMGT3',event:'SRP Endurance — Road Atlanta',viewers:41,url:'#'},
+{name:'Marc V.',game:'iRacing',title:'Daytona multiclass practice',event:'Prototype Night — Daytona',viewers:23,url:'#'}];
+
+const state={
+ view:'home',sim:'Todos',day:'Todos',type:'Todos',eventId:null,
+ user:null,profile:null,backend:'demo',loading:true,
+ events:[],communities:[],championships:[],streams:[],rounds:[],registrations:[],profiles:[],results:[],
+ registered:new Set(JSON.parse(localStorage.getItem('rh-reg')||'[]')),
+ following:new Set(JSON.parse(localStorage.getItem('rh-follow')||'[]'))
+};
+
+const cfg=window.RACEHUB_CONFIG||{};
+let db=null;
+let supabaseActivated=false;
+
+async function activateSupabase(){
+ if(supabaseActivated || !cfg.supabaseUrl || !cfg.supabaseAnonKey || !window.supabase) return;
+ supabaseActivated=true;
+ try{
+   db=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey);
+   state.backend='supabase';
+   state.loading=true;
+   render();
+   await boot();
+ }catch(err){
+   console.warn('No se pudo activar Supabase; RaceHub sigue en modo demo.',err);
+   db=null;
+   state.backend='demo-error';
+   useDemo();
+   state.loading=false;
+   render();
+ }
+}
+
+function esc(v=''){return String(v).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function saveLocal(){localStorage.setItem('rh-reg',JSON.stringify([...state.registered]));localStorage.setItem('rh-follow',JSON.stringify([...state.following]));}
+function dt(iso){const d=new Date(iso);return {day:d.toLocaleDateString('es-ES',{weekday:'short',day:'2-digit',month:'2-digit'}),time:d.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})};}
+function goto(v){state.view=v;render();scrollTo({top:0,behavior:'smooth'});}
+function toast(msg){const t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),2400);}
+function modal(html){document.querySelector('#modal-root').innerHTML=`<div class="modal-backdrop" onclick="closeModal(event)"><div class="modal">${html}</div></div>`;}
+function closeModal(e){if(!e||e.target.classList.contains('modal-backdrop'))document.querySelector('#modal-root').innerHTML='';}
+
+async function boot(){
+ if(db){
+   const {data:{session}}=await db.auth.getSession(); state.user=session?.user||null;
+   db.auth.onAuthStateChange(async(_e,s)=>{state.user=s?.user||null;await loadData();render();});
+   await loadData();
+ } else {
+   useDemo();
+ }
+ state.loading=false;render();
+}
