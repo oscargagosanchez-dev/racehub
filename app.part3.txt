@@ -48,10 +48,42 @@ function eventManageCard(e){const d=dt(e.startsAt);return `<div class="card mana
 function championshipManageCard(c){const rounds=state.rounds.filter(r=>r.championship_id===c.id);return `<div class="card manage-block"><div class="section-head"><div><div class="kicker">${esc(c.sim)}</div><b>${esc(c.name)}</b><div class="muted small">${esc(c.class)} · ${rounds.length} rondas · ${esc(c.status)}</div></div><div class="manage-actions"><button class="ghost" onclick="championshipDetail('${c.id}')">Clasificación</button><button class="ghost" onclick="scoringModal('${c.id}')">Puntos</button><button class="ghost" onclick="addRoundModal('${c.id}')">+ Ronda</button><button class="danger" onclick="deleteChampionship('${c.id}')">Eliminar</button></div></div>${rounds.length?`<div class="round-list">${rounds.map(r=>`<div class="round-item"><b>R${r.round_number}</b><span>${esc(r.name)}</span><span class="muted">${esc(r.track||'')}</span><button class="danger-link" onclick="deleteRound('${r.id}')">Eliminar</button></div>`).join('')}</div>`:'<div class="muted small">Sin rondas todavía.</div>'}</div>`;}
 
 function authModal(note=''){
- modal(`<button class="modal-close" onclick="closeModal()">×</button><div class="kicker">Cuenta RaceHub</div><h2>Entrar o registrarse</h2>${note?`<p class="notice">${esc(note)}</p>`:''}<label>Email</label><input id="auth-email" class="field" type="email" placeholder="tu@email.com"><label>Contraseña</label><input id="auth-pass" class="field" type="password" placeholder="Mínimo 6 caracteres"><label>Nickname</label><input id="auth-nick" class="field" placeholder="Nombre visible"><div class="modal-actions"><button class="primary" onclick="signIn()">Entrar</button><button class="ghost bordered" onclick="signUp()">Crear cuenta</button></div><p class="muted small">${db?'Autenticación real mediante Supabase.':'Modo demo: configura Supabase para activar cuentas reales.'}</p>`);
+ modal(`<button class="modal-close" onclick="closeModal()">×</button><div class="kicker">Cuenta RaceHub</div><h2>Entrar o registrarse</h2>${note?`<p class="notice">${esc(note)}</p>`:''}<div id="auth-error"></div><label>Email</label><input id="auth-email" class="field" type="email" autocomplete="email" placeholder="tu@email.com"><label>Contraseña</label><input id="auth-pass" class="field" type="password" autocomplete="current-password" placeholder="Mínimo 6 caracteres"><label>Nickname</label><input id="auth-nick" class="field" autocomplete="nickname" placeholder="Nombre visible"><div class="modal-actions"><button id="auth-login-btn" class="primary" onclick="signIn()">Entrar</button><button id="auth-signup-btn" class="ghost bordered" onclick="signUp()">Crear cuenta</button></div><p class="muted small">${db?'Autenticación real mediante Supabase.':'Modo demo: configura Supabase para activar cuentas reales.'}</p>`);
 }
-async function signIn(){if(!db)return toast('Supabase todavía no está configurado.');const email=document.querySelector('#auth-email').value.trim(),password=document.querySelector('#auth-pass').value;const {error}=await db.auth.signInWithPassword({email,password});if(error)return toast(error.message);closeModal();toast('Sesión iniciada');}
-async function signUp(){if(!db)return toast('Supabase todavía no está configurado.');const email=document.querySelector('#auth-email').value.trim(),password=document.querySelector('#auth-pass').value,nickname=document.querySelector('#auth-nick').value.trim()||email.split('@')[0];const {error}=await db.auth.signUp({email,password,options:{data:{nickname}}});if(error)return toast(error.message);closeModal();toast('Cuenta creada. Revisa tu email si Supabase exige confirmación.');}
+function setAuthError(message,type='error'){
+ const el=document.querySelector('#auth-error'); if(!el)return;
+ el.innerHTML=message?`<p class="${type==='ok'?'auth-success':'notice'}">${esc(message)}</p>`:'';
+}
+async function signIn(){
+ if(!db)return setAuthError('Supabase todavía no está configurado.');
+ const email=document.querySelector('#auth-email').value.trim(),password=document.querySelector('#auth-pass').value;
+ if(!email)return setAuthError('Escribe tu email.');
+ if(!email.includes('@'))return setAuthError('El email no parece válido.');
+ if(!password)return setAuthError('Escribe tu contraseña.');
+ const btn=document.querySelector('#auth-login-btn'); if(btn){btn.disabled=true;btn.textContent='Entrando…';}
+ try{
+   const {error}=await db.auth.signInWithPassword({email,password});
+   if(error)return setAuthError(error.message||'No se ha podido iniciar sesión.');
+   closeModal();toast('Sesión iniciada');
+ }catch(err){setAuthError(err?.message||'Error de conexión al iniciar sesión.');}
+ finally{if(btn){btn.disabled=false;btn.textContent='Entrar';}}
+}
+async function signUp(){
+ if(!db)return setAuthError('Supabase todavía no está configurado.');
+ const email=document.querySelector('#auth-email').value.trim(),password=document.querySelector('#auth-pass').value,nickname=document.querySelector('#auth-nick').value.trim();
+ if(!email)return setAuthError('Escribe tu email.');
+ if(!email.includes('@'))return setAuthError('El email no parece válido.');
+ if(password.length<6)return setAuthError('La contraseña debe tener al menos 6 caracteres.');
+ if(!nickname)return setAuthError('Escribe el nickname que quieres mostrar en RaceHub.');
+ const btn=document.querySelector('#auth-signup-btn'); if(btn){btn.disabled=true;btn.textContent='Creando…';}
+ try{
+   const {data,error}=await db.auth.signUp({email,password,options:{data:{nickname},emailRedirectTo:window.location.origin+'/' }});
+   if(error)return setAuthError(error.message||'No se ha podido crear la cuenta.');
+   if(data?.session){closeModal();toast('Cuenta creada y sesión iniciada');}
+   else setAuthError('Cuenta creada. Revisa tu correo para confirmar el registro y después pulsa Entrar.','ok');
+ }catch(err){setAuthError(err?.message||'Error de conexión al crear la cuenta.');}
+ finally{if(btn){btn.disabled=false;btn.textContent='Crear cuenta';}}
+}
 async function signOut(){if(db)await db.auth.signOut();state.user=null;state.profile=null;state.registered.clear();state.following.clear();render();}
 
 
