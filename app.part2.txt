@@ -8,7 +8,7 @@ async function loadData(){
      db.from('stream_status').select('*').eq('is_live',true).limit(50),
      db.from('registrations').select('*').neq('status','cancelled').order('created_at',{ascending:true}).limit(1000),
      db.from('championship_rounds').select('*').order('round_number',{ascending:true}).limit(500),
-     db.from('profiles').select('id,nickname,twitch_enabled,twitch_login').limit(1000),
+     db.from('profiles').select('id,nickname,twitch_enabled,twitch_login,youtube_url,discord_url,teamspeak_url').limit(1000),
      db.from('event_results').select('*').order('position',{ascending:true}).limit(2000)
    ]);
    if(ev.error||co.error||ch.error||rr.error||rounds.error||profiles.error||results.error) throw ev.error||co.error||ch.error||rr.error||rounds.error||profiles.error||results.error;
@@ -19,7 +19,7 @@ async function loadData(){
    const counts=new Map();
    state.registrations.forEach(r=>counts.set(r.event_id,(counts.get(r.event_id)||0)+1));
    state.events=(ev.data||[]).map(x=>({id:x.id,title:x.title,community:x.communities?.name||'Comunidad',communityId:x.community_id,championshipId:x.championship_id,sim:x.simulator,track:x.track,class:x.car_class||'Multiclase',startsAt:x.starts_at,duration:x.duration_minutes,slots:counts.get(x.id)||0,max:x.max_slots,status:x.status,type:x.event_type,description:x.description||'',createdBy:x.created_by}));
-   state.communities=(co.data||[]).map(x=>({id:x.id,name:x.name,sims:x.description||'Simracing',members:0,events:state.events.filter(e=>e.communityId===x.id).length,tag:x.name.slice(0,3).toUpperCase(),ownerId:x.owner_id}));
+   state.communities=(co.data||[]).map(x=>({id:x.id,name:x.name,sims:x.description||'Simracing',description:x.description||'',country:x.country||'',language:x.language||'es',websiteUrl:x.website_url||'',youtubeUrl:x.youtube_url||'',discordUrl:x.discord_url||'',teamspeakUrl:x.teamspeak_url||'',members:0,events:state.events.filter(e=>e.communityId===x.id).length,tag:x.name.slice(0,3).toUpperCase(),ownerId:x.owner_id}));
    state.championships=(ch.data||[]).map(x=>({id:x.id,name:x.name,community:x.communities?.name||'Comunidad',communityId:x.community_id,sim:x.simulator,status:x.status,season:x.season||'',description:x.description||'',rounds:state.rounds.filter(r=>r.championship_id===x.id).length,class:x.car_class||'Multiclase',pointsSystem:Array.isArray(x.points_system)?x.points_system:[25,18,15,12,10,8,6,4,2,1]}));
    state.streams=(ss.data||[]).map(x=>{const p=state.profiles.find(p=>p.id===x.user_id);return {name:p?.nickname||'Piloto',game:x.game_name||'Simracing',title:x.title||'En directo',event:state.events.find(e=>e.id===x.event_id)?.title||'Directo',viewers:x.viewer_count||0,url:x.twitch_url||'#'}});
    state.backend='supabase';
