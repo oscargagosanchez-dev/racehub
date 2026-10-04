@@ -20,18 +20,34 @@ function createEventModal(){
  if(!available.length){toast('Primero crea una comunidad.');return createCommunityModal();}
  const opts=available.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
  const champOpts=state.championships.filter(ch=>available.some(c=>String(c.id)===String(ch.communityId))).map(ch=>`<option value="${esc(ch.id)}">${esc(ch.name)}</option>`).join('');
- modal(`<button class="modal-close" onclick="closeModal()">×</button><div class="kicker">Organizador</div><h2>Crear evento</h2><label>Comunidad</label><select id="ce-community" class="field">${opts}</select><label>Campeonato (opcional)</label><select id="ce-championship" class="field"><option value="">Carrera suelta</option>${champOpts}</select><label>Nombre del evento</label><input id="ce-title" class="field" placeholder="2H Spa Endurance"><div class="form-grid"><div><label>Simulador</label><input id="ce-sim" class="field" value="Le Mans Ultimate"></div><div><label>Circuito</label><input id="ce-track" class="field" placeholder="Spa-Francorchamps"></div><div><label>Categoría</label><input id="ce-class" class="field" placeholder="LMGT3"></div><div><label>Tipo</label><select id="ce-type" class="field"><option>Endurance</option><option>Sprint</option><option>Campeonato</option><option>Carrera</option></select></div><div><label>Fecha y hora</label><input id="ce-start" class="field" type="datetime-local"></div><div><label>Duración (min)</label><input id="ce-duration" class="field" type="number" value="90"></div><div><label>Plazas</label><input id="ce-max" class="field" type="number" value="40"></div></div><button class="primary" style="width:100%;margin-top:18px" onclick="createEvent()">PUBLICAR EVENTO</button>`);
+ modal(`<button class="modal-close" onclick="closeModal()">×</button><div class="kicker">Organizador</div><h2>Crear evento</h2><div id="ce-error"></div><label>Comunidad</label><select id="ce-community" class="field">${opts}</select><label>Campeonato (opcional)</label><select id="ce-championship" class="field"><option value="">Carrera suelta</option>${champOpts}</select><label>Nombre del evento</label><input id="ce-title" class="field" placeholder="2H Spa Endurance"><div class="form-grid"><div><label>Simulador</label><input id="ce-sim" class="field" value="Le Mans Ultimate"></div><div><label>Circuito</label><input id="ce-track" class="field" placeholder="Spa-Francorchamps"></div><div><label>Categoría</label><input id="ce-class" class="field" placeholder="LMGT3"></div><div><label>Tipo</label><select id="ce-type" class="field"><option>Endurance</option><option>Sprint</option><option>Campeonato</option><option>Carrera</option></select></div><div><label>Fecha y hora</label><input id="ce-start" class="field" type="datetime-local" required></div><div><label>Duración (min)</label><input id="ce-duration" class="field" type="number" min="1" value="90"></div><div><label>Plazas</label><input id="ce-max" class="field" type="number" min="1" value="40"></div></div><button id="ce-submit" class="primary" style="width:100%;margin-top:18px" onclick="createEvent()">PUBLICAR EVENTO</button>`);
+}
+function setEventError(message){
+ const el=document.querySelector('#ce-error'); if(!el)return;
+ el.innerHTML=message?`<p class="notice">${esc(message)}</p>`:'';
 }
 async function createEvent(){
  const c=document.querySelector('#ce-community').value,championship_id=document.querySelector('#ce-championship')?.value||null,title=document.querySelector('#ce-title').value.trim(),sim=document.querySelector('#ce-sim').value.trim(),track=document.querySelector('#ce-track').value.trim(),carClass=document.querySelector('#ce-class').value.trim(),eventType=document.querySelector('#ce-type').value,start=document.querySelector('#ce-start').value,duration=Number(document.querySelector('#ce-duration').value||60),max=Number(document.querySelector('#ce-max').value||40);
- if(!title||!track||!start)return toast('Completa nombre, circuito y fecha.');
- if(db){
-   const {error}=await db.from('events').insert({community_id:c,championship_id:championship_id||null,title,simulator:sim,track,car_class:carClass,event_type:eventType,starts_at:new Date(start).toISOString(),duration_minutes:duration,max_slots:max,status:'open',created_by:state.user.id});
-   if(error)return toast(error.message);await loadData();
- }else{
-   const community=state.communities.find(x=>String(x.id)===String(c));state.events.unshift({id:'local-'+Date.now(),title,community:community?.name||'Mi comunidad',communityId:c,sim,track,class:carClass,startsAt:new Date(start).toISOString(),duration,slots:0,max,status:'open',type:eventType});
- }
- closeModal();toast('Evento publicado');render();
+ if(!title)return setEventError('Escribe el nombre del evento.');
+ if(!track)return setEventError('Escribe el circuito.');
+ if(!start)return setEventError('Selecciona la fecha y también la hora del evento.');
+ if(!sim)return setEventError('Selecciona o escribe el simulador.');
+ if(duration<1)return setEventError('La duración debe ser mayor de 0 minutos.');
+ if(max<1)return setEventError('El número de plazas debe ser mayor de 0.');
+ const parsedStart=new Date(start);
+ if(Number.isNaN(parsedStart.getTime()))return setEventError('La fecha y hora no son válidas.');
+ const btn=document.querySelector('#ce-submit'); if(btn){btn.disabled=true;btn.textContent='PUBLICANDO…';}
+ try{
+   if(db){
+     const {error}=await db.from('events').insert({community_id:c,championship_id:championship_id||null,title,simulator:sim,track,car_class:carClass,event_type:eventType,starts_at:parsedStart.toISOString(),duration_minutes:duration,max_slots:max,status:'open',created_by:state.user.id});
+     if(error)return setEventError(error.message||'No se ha podido publicar el evento.');
+     await loadData();
+   }else{
+     const community=state.communities.find(x=>String(x.id)===String(c));state.events.unshift({id:'local-'+Date.now(),title,community:community?.name||'Mi comunidad',communityId:c,sim,track,class:carClass,startsAt:parsedStart.toISOString(),duration,slots:0,max,status:'open',type:eventType});
+   }
+   closeModal();toast('Evento publicado');render();
+ }catch(err){setEventError(err?.message||'Error al publicar el evento.');}
+ finally{if(btn){btn.disabled=false;btn.textContent='PUBLICAR EVENTO';}}
 }
 
 function render(){
