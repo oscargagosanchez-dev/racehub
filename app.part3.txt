@@ -13,6 +13,31 @@ function entryList(id,manage=false){
  if(!rows.length)return `<div class="card empty">Todavía no hay inscritos.</div>`;
  return `<div class="table-wrap"><table class="entry"><thead><tr><th>#</th><th>Piloto</th><th>Coche / Equipo</th><th>Estado</th>${manage?'<th>Gestión</th>':''}</tr></thead><tbody>${rows.map((r,i)=>{const p=state.profiles.find(p=>p.id===r.user_id);const live=state.streams.some(s=>s.name===(p?.nickname||''));return `<tr><td>${esc(r.race_number||String(i+1))}</td><td>${esc(p?.nickname||'Piloto')} ${live?'<span class="badge live">LIVE</span>':''}</td><td>${esc(r.car||r.team_name||'—')}</td><td><span class="badge ${r.status==='confirmed'?'open':r.status==='reserve'?'warn':'full'}">${esc(r.status)}</span></td>${manage?`<td><select class="mini-select" onchange="updateRegistrationStatus('${r.id}',this.value)"><option value="confirmed" ${r.status==='confirmed'?'selected':''}>Confirmado</option><option value="reserve" ${r.status==='reserve'?'selected':''}>Reserva</option><option value="cancelled">Cancelar</option></select><button class="danger-link" onclick="removeRegistration('${r.id}')">Eliminar</button></td>`:''}</tr>`}).join('')}</tbody></table></div>`;
 }
+function registrationModal(id){
+ const e=state.events.find(x=>String(x.id)===String(id)); if(!e)return toast('Evento no encontrado.');
+ if(!state.user)return authModal('Inicia sesión para inscribirte.');
+ const cars=carsForCategory(e.class);
+ modal(`<button class="modal-close" onclick="closeModal()">×</button><div class="kicker">Inscripción</div><h2>${esc(e.title)}</h2><div id="reg-error"></div><p class="muted">${esc(e.sim)} · ${esc(e.track)} · ${esc(e.class)}</p><div class="form-grid"><div><label>Número</label><input id="reg-number" class="field" type="number" min="0" max="999" placeholder="Ej. 23"></div><div><label>Coche</label><select id="reg-car" class="field"><option value="">Selecciona coche</option>${catalogOptions(cars)}</select></div></div><label>Equipo (opcional)</label><input id="reg-team" class="field" placeholder="Nombre del equipo"><button id="reg-submit" class="primary" style="width:100%;margin-top:18px" onclick="confirmRegistration('${id}')">CONFIRMAR INSCRIPCIÓN</button>`);
+}
+function setRegistrationError(message){
+ const el=document.querySelector('#reg-error'); if(!el)return;
+ el.innerHTML=message?`<p class="notice">${esc(message)}</p>`:'';
+}
+async function confirmRegistration(id){
+ const e=state.events.find(x=>String(x.id)===String(id)); if(!e)return setRegistrationError('Evento no encontrado.');
+ const car=document.querySelector('#reg-car')?.value||'',race_number=document.querySelector('#reg-number')?.value.trim()||'',team_name=document.querySelector('#reg-team')?.value.trim()||'';
+ if(!car)return setRegistrationError('Selecciona el coche con el que vas a participar.');
+ if(Number(e.slots)>=Number(e.max))return setRegistrationError('El evento está completo.');
+ const btn=document.querySelector('#reg-submit'); if(btn){btn.disabled=true;btn.textContent='INSCRIBIENDO…';}
+ try{
+   const {error}=await db.from('registrations').insert({event_id:id,user_id:state.user.id,status:'confirmed',car,race_number:race_number||null,team_name:team_name||null});
+   if(error)return setRegistrationError(error.message||'No se pudo completar la inscripción.');
+   state.registered.add(id);
+   await loadData();
+   closeModal();toast('Inscripción confirmada');render();
+ }catch(err){setRegistrationError(err?.message||'Error al procesar la inscripción.');}
+ finally{if(btn){btn.disabled=false;btn.textContent='CONFIRMAR INSCRIPCIÓN';}}
+}
 async function toggleRegister(id){
  const selectedEvent=state.events.find(e=>String(e.id)===String(id));
  if(!selectedEvent)return toast('Evento no encontrado.');
@@ -24,26 +49,16 @@ async function toggleRegister(id){
  }
  if(!db)return toast('Supabase no está conectado.');
  if(!state.user)return authModal('Inicia sesión para inscribirte.');
- try{
-   if(state.registered.has(id)){
-     const {error}=await db.from('registrations').delete().eq('event_id',id).eq('user_id',state.user.id);
-     if(error)return toast(error.message||'No se pudo cancelar la inscripción.');
-     state.registered.delete(id);
-     toast('Inscripción cancelada');
-   }else{
-     if(selectedEvent.status!=='open')return toast('Las inscripciones de este evento no están abiertas.');
-     if(Number(selectedEvent.slots)>=Number(selectedEvent.max))return toast('El evento está completo.');
-     const {error}=await db.from('registrations').insert({event_id:id,user_id:state.user.id,status:'confirmed'});
-     if(error)return toast(error.message||'No se pudo completar la inscripción.');
-     state.registered.add(id);
-     toast('Inscripción confirmada');
-   }
+ if(state.registered.has(id)){
+   const {error}=await db.from('registrations').delete().eq('event_id',id).eq('user_id',state.user.id);
+   if(error)return toast(error.message||'No se pudo cancelar la inscripción.');
+   state.registered.delete(id);
    await loadData();
-   render();
- }catch(err){
-   console.error('RaceHub registration error',err);
-   toast(err?.message||'Error al procesar la inscripción.');
+   toast('Inscripción cancelada');
+   return render();
  }
+ if(selectedEvent.status!=='open')return toast('Las inscripciones de este evento no están abiertas.');
+ registrationModal(id);
 }
 
 async function toggleFollow(id){
