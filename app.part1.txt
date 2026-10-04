@@ -67,9 +67,9 @@ function refreshCircuitSelect(simId,circuitId,current=''){
 }
 
 const state={
- view:'home',sim:'Todos',day:'Todos',type:'Todos',eventId:null,
+ view:'home',sim:'Todos',day:'Todos',type:'Todos',eventId:null,communityId:null,
  user:null,profile:null,backend:'demo',loading:true,
- events:[],communities:[],championships:[],streams:[],rounds:[],registrations:[],profiles:[],results:[],
+ events:[],communities:[],championships:[],streams:[],rounds:[],registrations:[],profiles:[],results:[],followRecords:[],
  registered:new Set(JSON.parse(localStorage.getItem('rh-reg')||'[]')),
  following:new Set(JSON.parse(localStorage.getItem('rh-follow')||'[]'))
 };
