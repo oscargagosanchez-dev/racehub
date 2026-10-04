@@ -1,0 +1,70 @@
+function useDemo(){state.events=DEMO_EVENTS;state.communities=DEMO_COMMUNITIES;state.championships=DEMO_CHAMPIONSHIPS;state.streams=DEMO_STREAMS;state.rounds=[];state.registrations=[];state.profiles=[];state.results=[];}
+async function loadData(){
+ try{
+   const [ev,co,ch,ss,rr,rounds,profiles,results]=await Promise.all([
+     db.from('events').select('*, communities(name)').order('starts_at',{ascending:true}).limit(200),
+     db.from('communities').select('*').order('name'),
+     db.from('championships').select('*, communities(name)').order('created_at',{ascending:false}).limit(100),
+     db.from('stream_status').select('*').eq('is_live',true).limit(50),
+     db.from('registrations').select('*').neq('status','cancelled').order('created_at',{ascending:true}).limit(1000),
+     db.from('championship_rounds').select('*').order('round_number',{ascending:true}).limit(500),
+     db.from('profiles').select('id,nickname,twitch_enabled,twitch_login').limit(1000),
+     db.from('event_results').select('*').order('position',{ascending:true}).limit(2000)
+   ]);
+   if(ev.error||co.error||ch.error||rr.error||rounds.error||profiles.error||results.error) throw ev.error||co.error||ch.error||rr.error||rounds.error||profiles.error||results.error;
+   state.registrations=rr.data||[];
+   state.rounds=rounds.data||[];
+   state.profiles=profiles.data||[];
+   state.results=results.data||[];
+   const counts=new Map();
+   state.registrations.forEach(r=>counts.set(r.event_id,(counts.get(r.event_id)||0)+1));
+   state.events=(ev.data||[]).map(x=>({id:x.id,title:x.title,community:x.communities?.name||'Comunidad',communityId:x.community_id,championshipId:x.championship_id,sim:x.simulator,track:x.track,class:x.car_class||'Multiclase',startsAt:x.starts_at,duration:x.duration_minutes,slots:counts.get(x.id)||0,max:x.max_slots,status:x.status,type:x.event_type,description:x.description||'',createdBy:x.created_by}));
+   state.communities=(co.data||[]).map(x=>({id:x.id,name:x.name,sims:x.description||'Simracing',members:0,events:state.events.filter(e=>e.communityId===x.id).length,tag:x.name.slice(0,3).toUpperCase(),ownerId:x.owner_id}));
+   state.championships=(ch.data||[]).map(x=>({id:x.id,name:x.name,community:x.communities?.name||'Comunidad',communityId:x.community_id,sim:x.simulator,status:x.status,season:x.season||'',description:x.description||'',rounds:state.rounds.filter(r=>r.championship_id===x.id).length,class:x.car_class||'Multiclase',pointsSystem:Array.isArray(x.points_system)?x.points_system:[25,18,15,12,10,8,6,4,2,1]}));
+   state.streams=(ss.data||[]).map(x=>{const p=state.profiles.find(p=>p.id===x.user_id);return {name:p?.nickname||'Piloto',game:x.game_name||'Simracing',title:x.title||'En directo',event:state.events.find(e=>e.id===x.event_id)?.title||'Directo',viewers:x.viewer_count||0,url:x.twitch_url||'#'}});
+   state.backend='supabase';
+   const realEmpty=!state.events.length&&!state.communities.length&&!state.championships.length;
+   if(realEmpty){
+     state.events=DEMO_EVENTS.map(x=>({...x,isDemo:true}));
+     state.communities=DEMO_COMMUNITIES.map(x=>({...x,isDemo:true,ownerId:null}));
+     state.championships=DEMO_CHAMPIONSHIPS.map(x=>({...x,isDemo:true,communityId:null,status:'active'}));
+     state.streams=DEMO_STREAMS.map(x=>({...x,isDemo:true}));
+     state.backend='supabase-empty-demo';
+   }
+   if(state.user){
+     const p=await db.from('profiles').select('*').eq('id',state.user.id).maybeSingle();state.profile=p.data||null;
+     state.registered=new Set((rr.data||[]).filter(r=>r.user_id===state.user.id&&r.status!=='cancelled').map(x=>x.event_id));
+     const f=await db.from('follows').select('community_id').eq('user_id',state.user.id); if(!f.error)state.following=new Set((f.data||[]).map(x=>x.community_id));
+   }else{
+     state.registered.clear(); state.following.clear(); state.profile=null;
+   }
+ }catch(err){console.warn('Supabase no disponible, modo demo:',err);state.backend='demo-error';useDemo();}
+}
+
+function nav(){
+ const account=state.user?`<button class="ghost" onclick="signOut()">Salir</button><button class="avatar" onclick="goto('profile')">${esc((state.profile?.nickname||state.user.email||'U').slice(0,2).toUpperCase())}</button>`:`<button class="primary compact" onclick="authModal()">Entrar</button>`;
+ return `<header class="topbar"><div class="brand"><div class="brandmark">R</div>RACEHUB</div><nav class="nav">${[['home','Inicio'],['races','Carreras'],['calendar','Calendario'],['championships','Campeonatos'],['communities','Comunidades'],['streams','Directos']].map(([v,l])=>`<button class="${state.view===v?'active':''}" onclick="goto('${v}')">${l}</button>`).join('')}</nav><div class="top-actions"><span class="backend-pill ${state.backend.startsWith('supabase')?'online':''}">${state.backend==='supabase'?'● Datos reales':state.backend==='supabase-empty-demo'?'● Supabase conectado · contenido demo':'● Demo'}</span><button class="ghost" onclick="goto('organizer')">Organizador</button>${account}</div></header>`;
+}
+function mobileNav(){return `<div class="mobile-nav">${[['home','⌂','Inicio'],['races','🏁','Carreras'],['calendar','▦','Calendario'],['streams','●','Directos'],['profile','◉','Perfil']].map(([v,i,l])=>`<button class="${state.view===v?'active':''}" onclick="goto('${v}')"><div>${i}</div>${l}</button>`).join('')}</div>`;}
+function statusBadge(e){const map={open:['open','Inscripciones abiertas'],closed:['full','Cerrado'],cancelled:['full','Cancelado'],finished:['warn','Finalizado']};const x=map[e.status]||map.closed;return `<span class="badge ${x[0]}">${x[1]}</span>`;}
+function eventCard(e){const reg=state.registered.has(e.id),d=dt(e.startsAt);return `<article class="card event-card" onclick="showEvent('${e.id}')"><div class="event-top"><span class="kicker">${esc(e.sim)}</span>${statusBadge(e)}</div><div class="event-title">${esc(e.title)}</div><div class="muted small">${esc(e.community)}</div><div class="meta"><span>📍 ${esc(e.track)}</span><span>🏎 ${esc(e.class)}</span><span>🕒 ${d.day} ${d.time}</span><span>⏱ ${e.duration} min</span></div><div class="slots"><div class="row small"><span>${e.slots}/${e.max} plazas</span><span>${reg?'✓ Inscrito':''}</span></div><div class="bar"><i style="width:${Math.min(100,Math.round((e.slots||0)/e.max*100))}%"></i></div></div></article>`;}
+function filtered(){return state.events.filter(e=>(state.sim==='Todos'||e.sim===state.sim)&&(state.type==='Todos'||e.type===state.type));}
+
+function home(){const emptyNotice=state.backend==='supabase-empty-demo'?`<div class="content" style="padding-bottom:0"><div class="notice"><b>Supabase ya está conectado.</b> La base real todavía está vacía, así que RaceHub muestra contenido de demostración hasta que creemos las primeras comunidades y carreras reales.</div></div>`:'';return `<main>${emptyNotice}<section class="hero"><div class="hero-card"><div class="kicker">Community Racing Platform</div><h1>¿QUÉ QUIERES CORRER?</h1><p class="sub">Todas las comunidades, campeonatos y carreras de simracing en un único lugar.</p><div class="searchbar"><select class="field" id="hsim"><option>Todos</option>${[...new Set(state.events.map(e=>e.sim))].map(x=>`<option>${esc(x)}</option>`).join('')}</select><select class="field" id="htype"><option>Todos</option>${[...new Set(state.events.map(e=>e.type))].map(x=>`<option>${esc(x)}</option>`).join('')}</select><input class="field" id="hsearch" placeholder="Circuito o comunidad"/><button class="primary" onclick="homeSearch()">BUSCAR CARRERA</button></div></div></section><div class="content"><section class="section"><div class="section-head"><div><div class="kicker">Próximamente</div><h2>Próximas carreras</h2></div><button class="ghost" onclick="goto('races')">Ver todas →</button></div><div class="grid cards3">${state.events.slice(0,6).map(eventCard).join('')}</div></section><section class="section"><div class="section-head"><div><div class="kicker">Streaming</div><h2>🔴 Pilotos en directo</h2></div><button class="ghost" onclick="goto('streams')">Ver directos →</button></div>${streamCards(state.streams.slice(0,3))}</section><section class="section"><div class="section-head"><div><div class="kicker">Comunidades</div><h2>Comunidades destacadas</h2></div><button class="ghost" onclick="goto('communities')">Explorar →</button></div><div class="grid cards4">${state.communities.slice(0,4).map(communityCard).join('')}</div></section></div></main>`;}
+function homeSearch(){state.sim=document.querySelector('#hsim').value;state.type=document.querySelector('#htype').value;state.view='races';render();}
+function races(){const sims=['Todos',...new Set(state.events.map(e=>e.sim))];return `<div class="content"><div class="page-head"><div class="kicker">Race Finder</div><h1>Carreras</h1><p class="muted">Encuentra algo para correr sin revisar decenas de canales.</p></div><div class="filters">${sims.map(x=>`<button class="chip ${state.sim===x?'active':''}" onclick="state.sim='${esc(x)}';render()">${esc(x)}</button>`).join('')}</div><div class="grid cards3">${filtered().map(eventCard).join('')||'<div class="card empty">No hay carreras con estos filtros.</div>'}</div></div>`;}
+function calendar(){const days=[0,1,2,3,4,5,6].map(n=>{const d=new Date();d.setDate(d.getDate()+n);return d});return `<div class="content"><div class="page-head"><div class="kicker">7 días</div><h1>Calendario</h1><p class="muted">Todos los eventos próximos, agrupados por día.</p></div><div class="week-list">${days.map(d=>{const key=d.toDateString();const evs=state.events.filter(e=>new Date(e.startsAt).toDateString()===key);return `<section class="day-card card"><div class="day-title">${d.toLocaleDateString('es-ES',{weekday:'long',day:'numeric',month:'long'})}</div>${evs.length?evs.map(eventCard).join(''):'<div class="muted">Sin eventos publicados.</div>'}</section>`}).join('')}</div></div>`;}
+function communityCard(c){const f=state.following.has(c.id);return `<div class="card"><div class="community"><div class="logo-tile">${esc(c.tag)}</div><div><b>${esc(c.name)}</b><div class="muted small">${esc(c.sims)}</div></div></div><div class="row" style="margin-top:18px"><div><div class="stat">${c.events}</div><div class="muted small">eventos</div></div><div><div class="stat">${c.members}</div><div class="muted small">seguidores</div></div></div><button class="${f?'ghost':'primary'}" style="margin-top:16px;width:100%" onclick="event.stopPropagation();toggleFollow('${c.id}')">${f?'✓ Siguiendo':'Seguir'}</button></div>`;}
+function communitiesView(){return `<div class="content"><div class="page-head"><div class="kicker">Organizadores</div><h1>Comunidades</h1><p class="muted">Cada comunidad conserva su identidad y sus competiciones.</p></div><div class="grid cards4">${state.communities.map(communityCard).join('')}</div></div>`;}
+
+function championshipEvents(champId){return state.events.filter(e=>String(e.championshipId)===String(champId));}
+function championshipStandings(champId){
+ const evIds=new Set(championshipEvents(champId).map(e=>String(e.id)));
+ const rows=state.results.filter(r=>evIds.has(String(r.event_id)));
+ const map=new Map();
+ rows.forEach(r=>{
+   const key=r.user_id||r.driver_name;
+   const cur=map.get(key)||{name:r.driver_name,team:r.team_name||'',points:0,wins:0,podiums:0,starts:0};
+   cur.points+=Number(r.points||0)+Number(r.bonus_points||0); cur.starts+=1;
+   if(Number(r.position)===1)cur.wins+=1; if(Number(r.position)<=3)cur.podiums+=1; map.set(key,cur);
+ });
