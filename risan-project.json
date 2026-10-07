@@ -1,0 +1,65 @@
+{
+  "schema_version": "1.0",
+  "project": {
+    "name": "RaceHub",
+    "id": "racehub",
+    "current_version": "0.4.4-dev",
+    "development_status": "En desarrollo",
+    "last_important_change": "Modelo de permisos reforzado: usuarios, gestores operativos y administrador; comunidades verificadas antes de poder publicar.",
+    "project_path": ".",
+    "path_mode": "manifest_directory",
+    "last_updated": "2026-10-07T20:09:00+02:00"
+  },
+  "quality": {
+    "open_bugs": [],
+    "fixed_bugs": [
+      "El propietario de una comunidad veía Seguir en lugar de Administrar.",
+      "El formulario de creación de eventos no publicaba por colisión con document.createEvent().",
+      "Se restauró el manejador real de inscripción a eventos.",
+      "Los pilotos pueden elegir manualmente su canal de Twitch."
+    ]
+  },
+  "planning": {
+    "pending_tasks": [
+      "Crear la interfaz de administración para usuarios y comunidades.",
+      "Crear la interfaz reducida para gestores operativos.",
+      "Probar de extremo a extremo los permisos de usuario, gestor y administrador.",
+      "Completar logos y banners de comunidades.",
+      "Implementar detección real de directos Twitch/YouTube.",
+      "Endurecer y probar resultados, clasificaciones y rondas."
+    ],
+    "next_objective": "Construir el panel de gestión de usuarios y comunidades respetando los roles y permisos ya protegidos en Supabase."
+  },
+  "dependencies": {
+    "apps": [],
+    "cores": [],
+    "services": [
+      {
+        "name": "Supabase",
+        "purpose": "Autenticación y base de datos de RaceHub",
+        "required_for_workspace_integration": false
+      }
+    ]
+  },
+  "workspace_integration": {
+    "enabled": true,
+    "optional": true,
+    "local_only": true,
+    "paid_api_required": false,
+    "reader": "Risan Workspace puede leer este archivo directamente desde la raíz del proyecto.",
+    "auto_update_command": "node tools/update-risan-project.mjs",
+    "local_build_command": "node tools/build-local.mjs",
+    "notes": "La integración no depende de OpenAI, AppDeploy, Netlify, Vercel ni APIs de pago."
+  },
+  "build": {
+    "version_file": "VERSION",
+    "generated_frontend": "app.js",
+    "source_parts": [
+      "app.part1.txt",
+      "app.part2.txt",
+      "app.part3.txt",
+      "app.part4.txt",
+      "app.part5.txt"
+    ]
+  }
+}
