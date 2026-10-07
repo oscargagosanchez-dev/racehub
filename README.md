@@ -1,4 +1,4 @@
-# RaceHub v0.4 — Supabase real
+# RaceHub v0.4.4-dev — Supabase real
 
 Incluye:
 - Auth real con Supabase
@@ -26,3 +26,15 @@ No hay claves secretas dentro del frontend.
 - Contenido demo mientras Supabase real esté vacío.
 - El contenido demo no se guarda como datos reales.
 - El panel Organizador solo usa comunidades reales creadas por el usuario.
+
+
+## Risan Workspace
+
+El proyecto incluye una integración local y opcional mediante `risan-project.json`.
+
+- No usa créditos.
+- No depende de OpenAI, AppDeploy, Netlify, Vercel ni APIs de pago.
+- La versión maestra está en `VERSION`.
+- `node tools/update-risan-project.mjs` actualiza el estado local.
+- `node tools/build-local.mjs` actualiza el manifest y genera `app.js`.
+- Más detalles en `RISAN-WORKSPACE.md`.
